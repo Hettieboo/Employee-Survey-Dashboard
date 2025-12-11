@@ -1,5 +1,5 @@
 # ================================================================
-# Interactive Employee Survey Dashboard - Streamlit (Updated)
+# Streamlit Employee Survey Dashboard - Updated (Minimal Changes)
 # ================================================================
 
 import pandas as pd
@@ -13,17 +13,14 @@ plt.rcParams['figure.figsize'] = (10,6)
 st.set_page_config(page_title="Homes First Survey Dashboard", layout="wide")
 st.title("Homes First Employee Survey Dashboard")
 
-# -----------------------------
 # 1️⃣ Upload dataset
-# -----------------------------
 uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
     st.write("Dataset shape:", df.shape)
-    st.dataframe(df.head(3))
 
     # -----------------------------
-    # 2️⃣ Identify key columns dynamically
+    # Key columns
     # -----------------------------
     role_col = [c for c in df.columns if "role" in c.lower() or "department" in c.lower()][0]
     age_col = [c for c in df.columns if "age" in c.lower()][0]
@@ -38,13 +35,13 @@ if uploaded_file:
     disability_col = [c for c in df.columns if "disability" in c.lower()][0]
 
     # -----------------------------
-    # 3️⃣ Convert key columns to string
+    # Convert key columns to str
     # -----------------------------
     for col in [recommend_col, recognized_col, growth_col, impact_col, training_pref_col, fulfillment_col, disability_col]:
         df[col] = df[col].astype(str)
 
     # -----------------------------
-    # 4️⃣ Interactive filters
+    # Filters
     # -----------------------------
     st.sidebar.header("Filter Employees")
     role_filter = st.sidebar.multiselect("Role/Department", df[role_col].unique(), default=df[role_col].unique())
@@ -54,11 +51,10 @@ if uploaded_file:
     st.write(f"Filtered dataset: {df_filtered.shape[0]} respondents")
 
     # -----------------------------
-    # 5️⃣ KPI Metrics
+    # KPIs
     # -----------------------------
     st.header("Key Metrics")
     col1, col2, col3, col4 = st.columns(4)
-
     total = df_filtered.shape[0]
 
     positive_rec = df_filtered[df_filtered[recommend_col].str.lower().str.contains("likely|yes", na=False)].shape[0]
@@ -74,18 +70,25 @@ if uploaded_file:
     col4.metric("Feel Positive Impact", f"{impact}/{total} ({impact/total*100:.1f}%)")
 
     # -----------------------------
-    # 6️⃣ Helper function: add counts inside bars
+    # Helper for counts inside bars
     # -----------------------------
-    def add_counts_inside_bars(ax):
+    def add_counts(ax, vertical=True):
         for p in ax.patches:
-            height = p.get_height()
-            if height > 0:
-                ax.annotate(f'{int(height)}',
-                            (p.get_x() + p.get_width() / 2., height/2),
-                            ha='center', va='center', color='white', fontsize=10)
+            if vertical:
+                height = p.get_height()
+                if height > 0:
+                    ax.annotate(f'{int(height)}', 
+                                (p.get_x() + p.get_width() / 2., height/2),
+                                ha='center', va='center', color='white', fontsize=10)
+            else:
+                width = p.get_width()
+                if width > 0:
+                    ax.annotate(f'{int(width)}',
+                                (width/2, p.get_y() + p.get_height()/2),
+                                ha='center', va='center', color='white', fontsize=10)
 
     # -----------------------------
-    # 7️⃣ Demographics Charts
+    # Demographics
     # -----------------------------
     st.header("Demographics")
     col1, col2, col3 = st.columns(3)
@@ -102,8 +105,8 @@ if uploaded_file:
     order = df_filtered[age_col].value_counts().index
     sns.countplot(x=df_filtered[age_col], order=order, palette='magma', ax=ax)
     ax.set_title("Respondents by Age Group")
-    plt.xticks(rotation=45, ha='right')
-    add_counts_inside_bars(ax)
+    plt.xticks(rotation=0)
+    add_counts(ax)
     col2.pyplot(fig)
 
     # Gender
@@ -111,73 +114,71 @@ if uploaded_file:
     order = df_filtered[gender_col].value_counts().index
     sns.countplot(x=df_filtered[gender_col], order=order, palette='coolwarm', ax=ax)
     ax.set_title("Respondents by Gender")
-    plt.xticks(rotation=45, ha='right')
-    add_counts_inside_bars(ax)
+    plt.xticks(rotation=0)
+    add_counts(ax)
     col3.pyplot(fig)
 
     # -----------------------------
-    # 8️⃣ Job Fulfillment
+    # Job Fulfillment
     # -----------------------------
     st.header("Job Fulfillment")
     fig, ax = plt.subplots()
     order = df_filtered[fulfillment_col].value_counts().index
     sns.countplot(x=df_filtered[fulfillment_col], order=order, palette='plasma', ax=ax)
     ax.set_title("Job Fulfillment")
-    plt.xticks(rotation=45, ha='right')
-    add_counts_inside_bars(ax)
+    plt.xticks(rotation=0)
+    add_counts(ax)
     st.pyplot(fig)
 
     # -----------------------------
-    # 9️⃣ Training Preferences
+    # Training Preferences
     # -----------------------------
     st.header("Training Preferences")
     fig, ax = plt.subplots()
     order = df_filtered[training_pref_col].value_counts().index
     sns.countplot(x=df_filtered[training_pref_col], order=order, palette='Set2', ax=ax)
     ax.set_title("Training Mode Preference")
-    plt.xticks(rotation=45, ha='right')
-    add_counts_inside_bars(ax)
+    plt.xticks(rotation=0)
+    add_counts(ax)
     st.pyplot(fig)
 
     # -----------------------------
-    # 10️⃣ Disability Analysis (Stacked %)
+    # Disability Analysis (Stacked Percentage)
     # -----------------------------
     st.header("Disability Analysis")
 
-    def plot_stacked_percentage(df, category, hue, palette):
-        cross = pd.crosstab(df[category], df[hue], normalize='index') * 100
+    def plot_stacked_pct(df, category, hue, palette):
+        cross = pd.crosstab(df[category], df[hue], normalize='index')*100
         cross.plot(kind='bar', stacked=True, color=palette, figsize=(10,6))
         plt.ylabel("Percentage")
-        plt.xticks(rotation=45, ha='right')
-        plt.legend(title=hue, bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.xticks(rotation=0)
+        plt.legend(title=hue, bbox_to_anchor=(1.05,1), loc='upper left')
         plt.tight_layout()
         st.pyplot(plt.gcf())
         plt.clf()
 
-    # By Age
     st.subheader("Disability by Age Group")
-    plot_stacked_percentage(df_filtered, age_col, disability_col, palette=sns.color_palette("Set1"))
+    plot_stacked_pct(df_filtered, age_col, disability_col, palette=sns.color_palette("Set1"))
 
-    # By Gender
     st.subheader("Disability by Gender")
-    plot_stacked_percentage(df_filtered, gender_col, disability_col, palette=sns.color_palette("Set2"))
+    plot_stacked_pct(df_filtered, gender_col, disability_col, palette=sns.color_palette("Set2"))
 
     # -----------------------------
-    # 11️⃣ Cross Analysis
+    # Cross Analysis
     # -----------------------------
     st.header("Cross Analysis")
     st.subheader("Recommendation by Role")
     fig, ax = plt.subplots()
     sns.countplot(x=df_filtered[recommend_col], hue=df_filtered[role_col], data=df_filtered, palette='Set2', ax=ax)
     ax.set_title("Recommendation by Role/Department")
-    plt.xticks(rotation=45, ha='right')
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.xticks(rotation=0)
+    plt.legend(bbox_to_anchor=(1.05,1), loc='upper left')
     st.pyplot(fig)
 
     st.subheader("Recommendation by Age Group")
     fig, ax = plt.subplots()
     sns.countplot(x=df_filtered[recommend_col], hue=df_filtered[age_col], data=df_filtered, palette='Set3', ax=ax)
     ax.set_title("Recommendation by Age Group")
-    plt.xticks(rotation=45, ha='right')
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.xticks(rotation=0)
+    plt.legend(bbox_to_anchor=(1.05,1), loc='upper left')
     st.pyplot(fig)
