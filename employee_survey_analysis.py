@@ -1,5 +1,5 @@
 """
-Employee Survey Analysis Dashboard - Streamlit App
+Employee Survey Analysis Dashboard - Enhanced Streamlit App
 Save this as: survey_app.py
 Run with: streamlit run survey_app.py
 
@@ -13,17 +13,17 @@ from collections import Counter
 import matplotlib.pyplot as plt
 import seaborn as sns
 from io import BytesIO
-from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from datetime import datetime
 
 # Page configuration
 st.set_page_config(
-    page_title="Survey Analysis Dashboard",
+    page_title="Employee Survey Analysis",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -49,12 +49,12 @@ st.markdown("""
     div[data-testid="stMetricValue"] {
         font-size: 2rem;
     }
-    .metric-container {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1.5rem;
-        border-radius: 10px;
-        color: white;
-        text-align: center;
+    .insight-box {
+        background: #f0f9ff;
+        border-left: 4px solid #3b82f6;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 4px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -80,12 +80,14 @@ THEMES = {
 
 POSITIVE_WORDS = [
     'fulfilling', 'great', 'excellent', 'positive', 'amazing', 'helpful', 'supportive',
-    'good', 'love', 'enjoy', 'happy', 'appreciated', 'wonderful', 'rewarding', 'fantastic'
+    'good', 'love', 'enjoy', 'happy', 'appreciated', 'wonderful', 'rewarding', 'fantastic',
+    'best', 'strong', 'passionate', 'caring', 'dedicated'
 ]
 
 NEGATIVE_WORDS = [
     'challenging', 'difficult', 'poor', 'lack', 'never', 'inadequate', 'frustrating',
-    'stress', 'overwhelmed', 'unhappy', 'concerned', 'disappointed', 'insufficient'
+    'stress', 'overwhelmed', 'unhappy', 'concerned', 'disappointed', 'insufficient',
+    'understaffed', 'burnout', 'worried', 'struggle', 'problem'
 ]
 
 
@@ -106,9 +108,11 @@ def find_columns(df):
     # Find specific column types
     role_col = next((c for c in cols if 'role' in c.lower() or 'department' in c.lower()), None)
     age_col = next((c for c in cols if 'age' in c.lower()), None)
+    gender_col = next((c for c in cols if 'gender' in c.lower()), None)
     recommend_col = next((c for c in cols if 'recommend' in c.lower()), None)
+    years_col = next((c for c in cols if 'years' in c.lower() and 'employ' in c.lower()), None)
     
-    # Find text columns (responses with longer average length)
+    # Find text columns (comments/open-ended responses)
     text_cols = []
     for col in cols:
         if df[col].dtype == 'object':
@@ -121,7 +125,9 @@ def find_columns(df):
     return {
         'role': role_col,
         'age': age_col,
+        'gender': gender_col,
         'recommend': recommend_col,
+        'years': years_col,
         'text': text_cols
     }
 
@@ -146,7 +152,6 @@ def get_word_frequency(df, text_cols, top_n=25):
     
     for col in text_cols:
         for text in df[col].dropna().astype(str):
-            # Clean and split text
             words = text.lower().replace(',', ' ').replace('.', ' ').replace('!', ' ').replace('?', ' ').split()
             words = [w.strip('.,!?;:()[]{}"\'-') for w in words]
             words = [w for w in words if len(w) > 3 and w not in STOP_WORDS and w.isalpha()]
@@ -170,63 +175,36 @@ def calculate_sentiment(df, text_cols):
     return positive_count, negative_count
 
 
-def create_bar_chart(data, x_col, y_col, title, figsize=(10, 6), horizontal=False, color='steelblue'):
-    """Create a matplotlib bar chart"""
-    fig, ax = plt.subplots(figsize=figsize)
+def calculate_nps(df, recommend_col):
+    """Calculate Net Promoter Score"""
+    if recommend_col not in df.columns:
+        return None, None, None, None
     
-    if horizontal:
-        bars = ax.barh(data[y_col], data[x_col], color=color)
-        ax.set_xlabel(x_col, fontsize=11)
-        ax.set_ylabel(y_col, fontsize=11)
-    else:
-        bars = ax.bar(data[x_col], data[y_col], color=color)
-        ax.set_xlabel(x_col, fontsize=11)
-        ax.set_ylabel(y_col, fontsize=11)
-        plt.xticks(rotation=45, ha='right')
+    responses = df[recommend_col].dropna()
+    total = len(responses)
     
-    ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
+    if total == 0:
+        return None, None, None, None
     
-    # Add value labels
-    if horizontal:
-        for bar in bars:
-            width = bar.get_width()
-            ax.text(width, bar.get_y() + bar.get_height()/2.,
-                   f'{int(width)}', ha='left', va='center', fontsize=9)
-    else:
-        for bar in bars:
-            height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height,
-                   f'{int(height)}', ha='center', va='bottom', fontsize=9)
+    # Count promoters (top 2 categories) and detractors (bottom 2 categories)
+    value_counts = responses.value_counts()
+    sorted_categories = sorted(value_counts.index)
     
-    plt.tight_layout()
-    return fig
+    if len(sorted_categories) < 2:
+        return None, None, None, None
+    
+    # Assume last 2 are promoters, first 2 are detractors
+    promoters = value_counts[sorted_categories[-2:]].sum() if len(sorted_categories) >= 2 else 0
+    detractors = value_counts[sorted_categories[:2]].sum() if len(sorted_categories) >= 2 else 0
+    
+    nps = ((promoters - detractors) / total) * 100
+    promoter_pct = (promoters / total) * 100
+    detractor_pct = (detractors / total) * 100
+    
+    return nps, promoter_pct, detractor_pct, total
 
 
-def create_pie_chart(data, values_col, names_col, title, figsize=(8, 8)):
-    """Create a matplotlib pie chart"""
-    fig, ax = plt.subplots(figsize=figsize)
-    
-    colors = sns.color_palette("Set3", len(data))
-    wedges, texts, autotexts = ax.pie(
-        data[values_col], 
-        labels=data[names_col],
-        autopct='%1.1f%%',
-        colors=colors,
-        startangle=90
-    )
-    
-    ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
-    
-    for autotext in autotexts:
-        autotext.set_color('white')
-        autotext.set_fontweight('bold')
-        autotext.set_fontsize(10)
-    
-    plt.tight_layout()
-    return fig
-
-
-def generate_pdf_report(df, cols, positive_count, negative_count):
+def generate_pdf_report(df, cols, positive_count, negative_count, nps_score):
     """Generate a comprehensive PDF report"""
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
@@ -273,8 +251,11 @@ def generate_pdf_report(df, cols, positive_count, negative_count):
         ['Survey Questions', str(len(df.columns))],
         ['Positive Mentions', str(positive_count)],
         ['Negative Mentions', str(negative_count)],
-        ['Text Response Columns', str(len(cols['text']) if cols['text'] else 0)]
+        ['Text Response Columns', str(len(cols['text']) if cols['text'] else 0)],
     ]
+    
+    if nps_score is not None:
+        summary_data.append(['Net Promoter Score (NPS)', f"{nps_score:.1f}"])
     
     summary_table = Table(summary_data, colWidths=[3*inch, 2*inch])
     summary_table.setStyle(TableStyle([
@@ -294,46 +275,6 @@ def generate_pdf_report(df, cols, positive_count, negative_count):
     story.append(summary_table)
     story.append(Spacer(1, 0.3*inch))
     
-    # Sentiment Analysis
-    if positive_count > 0 or negative_count > 0:
-        story.append(Paragraph("Sentiment Analysis", heading_style))
-        
-        sentiment_ratio = positive_count / (positive_count + negative_count) * 100 if (positive_count + negative_count) > 0 else 0
-        sentiment_text = f"The survey shows a {sentiment_ratio:.1f}% positive sentiment ratio, with {positive_count} positive indicators and {negative_count} areas of concern identified across all responses."
-        story.append(Paragraph(sentiment_text, styles['Normal']))
-        story.append(Spacer(1, 0.2*inch))
-    
-    # Demographics
-    if cols['role']:
-        story.append(PageBreak())
-        story.append(Paragraph("Demographics: Role Distribution", heading_style))
-        
-        role_data = df[cols['role']].value_counts().reset_index()
-        role_data.columns = ['Role', 'Count']
-        role_data['Percentage'] = (role_data['Count'] / role_data['Count'].sum() * 100).round(1)
-        
-        # Convert to table
-        role_table_data = [['Role', 'Count', 'Percentage']]
-        for _, row in role_data.iterrows():
-            role_table_data.append([str(row['Role']), str(row['Count']), f"{row['Percentage']}%"])
-        
-        role_table = Table(role_table_data, colWidths=[3*inch, 1*inch, 1*inch])
-        role_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#8b5cf6')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 11),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
-        ]))
-        
-        story.append(role_table)
-        story.append(Spacer(1, 0.2*inch))
-    
     # Theme Analysis
     if cols['text']:
         story.append(PageBreak())
@@ -343,7 +284,6 @@ def generate_pdf_report(df, cols, positive_count, negative_count):
         theme_df = pd.DataFrame(list(theme_counts.items()), columns=['Theme', 'Mentions'])
         theme_df = theme_df.sort_values('Mentions', ascending=False)
         
-        # Convert to table
         theme_table_data = [['Theme', 'Mentions']]
         for _, row in theme_df.iterrows():
             theme_table_data.append([str(row['Theme']), str(row['Mentions'])])
@@ -363,62 +303,6 @@ def generate_pdf_report(df, cols, positive_count, negative_count):
         ]))
         
         story.append(theme_table)
-        story.append(Spacer(1, 0.2*inch))
-        
-        # Word Frequency
-        story.append(PageBreak())
-        story.append(Paragraph("Most Frequent Words", heading_style))
-        
-        word_freq = get_word_frequency(df, cols['text'], top_n=15)
-        if word_freq:
-            word_table_data = [['Word', 'Frequency']]
-            for word, freq in word_freq:
-                word_table_data.append([word, str(freq)])
-            
-            word_table = Table(word_table_data, colWidths=[3*inch, 2*inch])
-            word_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#ec4899')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 11),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 9),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
-            ]))
-            
-            story.append(word_table)
-    
-    # Recommendations section
-    if cols['recommend']:
-        story.append(PageBreak())
-        story.append(Paragraph("Recommendation Likelihood", heading_style))
-        
-        rec_data = df[cols['recommend']].value_counts().reset_index()
-        rec_data.columns = ['Response', 'Count']
-        rec_data['Percentage'] = (rec_data['Count'] / rec_data['Count'].sum() * 100).round(1)
-        
-        rec_table_data = [['Response', 'Count', 'Percentage']]
-        for _, row in rec_data.iterrows():
-            rec_table_data.append([str(row['Response']), str(row['Count']), f"{row['Percentage']}%"])
-        
-        rec_table = Table(rec_table_data, colWidths=[3.5*inch, 1*inch, 1*inch])
-        rec_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3b82f6')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 11),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
-        ]))
-        
-        story.append(rec_table)
     
     # Footer
     story.append(Spacer(1, 0.5*inch))
@@ -426,7 +310,6 @@ def generate_pdf_report(df, cols, positive_count, negative_count):
     footer = Paragraph("<i>Generated by Employee Survey Analysis Tool • Built with Streamlit</i>", footer_style)
     story.append(footer)
     
-    # Build PDF
     doc.build(story)
     buffer.seek(0)
     return buffer
@@ -448,7 +331,6 @@ uploaded_file = st.file_uploader(
 )
 
 if not uploaded_file:
-    # Welcome screen
     st.info("👆 Please upload an Excel file to begin analysis")
     
     col1, col2, col3 = st.columns(3)
@@ -456,43 +338,29 @@ if not uploaded_file:
     with col1:
         st.markdown("""
         ### 📋 Overview
-        - Total responses
+        - Total responses & demographics
+        - Net Promoter Score (NPS)
         - Sentiment analysis
-        - Recommendation scores
-        - Key metrics at a glance
+        - Key insights
         """)
     
     with col2:
         st.markdown("""
-        ### 👥 Demographics
-        - Role distribution
-        - Age breakdown
-        - Department analysis
-        - Visual charts
+        ### 📈 Deep Analysis
+        - Cross-tabulations
+        - Theme detection
+        - Word frequency
+        - Engagement metrics
         """)
     
     with col3:
         st.markdown("""
-        ### 💬 Text Analysis
-        - Word frequency
-        - Theme detection
-        - Sentiment tracking
-        - Searchable data
+        ### 📄 Export & Share
+        - Download full PDF report
+        - Export raw data
+        - Save insights
+        - Share findings
         """)
-    
-    st.markdown("---")
-    st.markdown("""
-    ### 🚀 Getting Started
-    1. **Upload** your Excel file using the button above
-    2. **Explore** different tabs for various insights
-    3. **Export** findings as needed
-    4. **Share** results with your team
-    
-    ### 📦 Requirements
-    ```bash
-    pip install streamlit pandas openpyxl matplotlib seaborn reportlab
-    ```
-    """)
     
     st.stop()
 
@@ -516,8 +384,11 @@ negative_count = 0
 if cols['text']:
     positive_count, negative_count = calculate_sentiment(df, cols['text'])
 
+# Calculate NPS
+nps_score, promoter_pct, detractor_pct, nps_total = calculate_nps(df, cols['recommend'])
+
 # ================================================================
-# SUMMARY METRICS
+# SUMMARY METRICS WITH PDF DOWNLOAD
 # ================================================================
 st.markdown("### 📈 Key Metrics")
 
@@ -527,7 +398,7 @@ with col_header2:
     if st.button("📄 Download Full Report as PDF", type="primary", use_container_width=True):
         with st.spinner("Generating PDF report..."):
             try:
-                pdf_buffer = generate_pdf_report(df, cols, positive_count, negative_count)
+                pdf_buffer = generate_pdf_report(df, cols, positive_count, negative_count, nps_score)
                 st.download_button(
                     "⬇️ Click to Download PDF",
                     pdf_buffer,
@@ -539,7 +410,8 @@ with col_header2:
             except Exception as e:
                 st.error(f"Error generating PDF: {str(e)}")
 
-metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+# Metrics row
+metric_col1, metric_col2, metric_col3, metric_col4, metric_col5 = st.columns(5)
 
 with metric_col1:
     st.metric("Total Responses", len(df))
@@ -548,19 +420,26 @@ with metric_col2:
     st.metric("Survey Questions", len(df.columns))
 
 with metric_col3:
-    st.metric("Positive Mentions", positive_count)
+    st.metric("Positive Mentions", positive_count, delta=f"+{positive_count - negative_count}" if positive_count > negative_count else None)
 
 with metric_col4:
-    st.metric("Areas of Concern", negative_count)
+    st.metric("Concern Areas", negative_count)
+
+with metric_col5:
+    if nps_score is not None:
+        st.metric("Net Promoter Score", f"{nps_score:.1f}", delta="Good" if nps_score > 0 else "Needs Improvement")
+    else:
+        st.metric("NPS", "N/A")
 
 st.markdown("---")
 
 # ================================================================
 # TABS
 # ================================================================
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📋 Overview",
     "👥 Demographics", 
+    "🔍 Cross-Analysis",
     "💬 Text Analysis",
     "🎯 Themes",
     "📄 Raw Data"
@@ -570,50 +449,72 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 # TAB 1: OVERVIEW
 # ================================================================
 with tab1:
-    st.header("Survey Overview")
+    st.header("Survey Overview & Key Insights")
     
-    # Recommendation analysis
+    # Quick insights
+    st.markdown("### 🎯 Quick Insights")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown('<div class="insight-box">', unsafe_allow_html=True)
+        st.markdown("**📊 Response Rate**")
+        response_rate = len(df)
+        st.write(f"Total responses collected: **{response_rate}**")
+        
+        if cols['role']:
+            unique_roles = df[cols['role']].nunique()
+            st.write(f"Representing **{unique_roles}** different roles/departments")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown('<div class="insight-box">', unsafe_allow_html=True)
+        st.markdown("**😊 Sentiment Overview**")
+        if positive_count > 0 or negative_count > 0:
+            sentiment_ratio = (positive_count / (positive_count + negative_count)) * 100
+            st.write(f"Positive sentiment: **{sentiment_ratio:.1f}%**")
+            st.write(f"Positive indicators: {positive_count} | Concerns: {negative_count}")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # NPS Analysis
+    if nps_score is not None:
+        st.markdown("### 🎖️ Net Promoter Score (NPS) Analysis")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("NPS Score", f"{nps_score:.1f}", help="Score ranges from -100 to +100")
+        with col2:
+            st.metric("Promoters", f"{promoter_pct:.1f}%", help="Employees who would recommend")
+        with col3:
+            st.metric("Detractors", f"{detractor_pct:.1f}%", help="Employees with concerns")
+        
+        # NPS Interpretation
+        if nps_score > 50:
+            st.success("🌟 **Excellent!** Your NPS indicates high employee satisfaction and loyalty.")
+        elif nps_score > 0:
+            st.info("👍 **Good!** Positive sentiment overall, with room for improvement.")
+        else:
+            st.warning("⚠️ **Needs Attention!** Focus on addressing employee concerns.")
+    
+    # Recommendation breakdown
     if cols['recommend']:
-        st.subheader("Likelihood to Recommend")
+        st.markdown("### 📊 Recommendation Likelihood")
         
         rec_data = df[cols['recommend']].value_counts().reset_index()
         rec_data.columns = ['Response', 'Count']
+        rec_data['Percentage'] = (rec_data['Count'] / rec_data['Count'].sum() * 100).round(1)
         
-        fig = create_bar_chart(rec_data, 'Response', 'Count', 
-                              'How likely are you to recommend?',
-                              figsize=(12, 6), color='#3b82f6')
-        st.pyplot(fig)
-        plt.close()
+        fig, ax = plt.subplots(figsize=(12, 5))
+        bars = ax.barh(rec_data['Response'], rec_data['Count'], color='#3b82f6')
+        ax.set_xlabel('Number of Responses', fontsize=11)
+        ax.set_title('How likely are you to recommend as a good place to work?', fontsize=14, fontweight='bold')
         
-        total_responses = rec_data['Count'].sum()
-        st.info(f"**Total Responses:** {total_responses}")
-    
-    # Sentiment overview
-    if cols['text']:
-        st.subheader("Sentiment Overview")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.success(f"**✅ Positive Indicators:** {positive_count}")
-        with col2:
-            st.warning(f"**⚠️ Negative Indicators:** {negative_count}")
-        
-        # Sentiment chart
-        sentiment_df = pd.DataFrame({
-            'Sentiment': ['Positive', 'Negative'],
-            'Count': [positive_count, negative_count]
-        })
-        
-        fig, ax = plt.subplots(figsize=(10, 5))
-        colors = ['#10b981', '#ef4444']
-        bars = ax.bar(sentiment_df['Sentiment'], sentiment_df['Count'], color=colors)
-        ax.set_title('Sentiment Distribution', fontsize=14, fontweight='bold')
-        ax.set_ylabel('Count', fontsize=11)
-        
-        for bar in bars:
-            height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height,
-                   f'{int(height)}', ha='center', va='bottom', fontsize=11, fontweight='bold')
+        for i, bar in enumerate(bars):
+            width = bar.get_width()
+            ax.text(width, bar.get_y() + bar.get_height()/2.,
+                   f"{int(width)} ({rec_data['Percentage'].iloc[i]}%)",
+                   ha='left', va='center', fontsize=10, fontweight='bold')
         
         plt.tight_layout()
         st.pyplot(fig)
@@ -625,63 +526,203 @@ with tab1:
 with tab2:
     st.header("Demographics Analysis")
     
+    # Role/Department
+    if cols['role']:
+        st.subheader("📍 Respondents by Role/Department")
+        role_data = df[cols['role']].value_counts().reset_index()
+        role_data.columns = ['Role', 'Count']
+        role_data['Percentage'] = (role_data['Count'] / role_data['Count'].sum() * 100).round(1)
+        
+        fig, ax = plt.subplots(figsize=(12, 6))
+        sns.barplot(y='Role', x='Count', data=role_data, palette='viridis', ax=ax)
+        ax.set_title('Distribution by Role/Department', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Count', fontsize=11)
+        
+        for i, v in enumerate(role_data['Count']):
+            ax.text(v, i, f" {v} ({role_data['Percentage'].iloc[i]}%)", 
+                   va='center', fontsize=10, fontweight='bold')
+        
+        plt.tight_layout()
+        st.pyplot(fig)
+        plt.close()
+        
+        with st.expander("📊 Detailed breakdown"):
+            st.dataframe(role_data, use_container_width=True)
+    
+    # Age, Gender, Years in two columns
     col1, col2 = st.columns(2)
     
     with col1:
-        if cols['role']:
-            st.subheader("Respondents by Role")
-            
-            role_data = df[cols['role']].value_counts().reset_index()
-            role_data.columns = ['Role', 'Count']
-            
-            fig = create_bar_chart(role_data, 'Count', 'Role',
-                                  'Distribution by Role/Department',
-                                  figsize=(10, 8), horizontal=True, color='#8b5cf6')
-            st.pyplot(fig)
-            plt.close()
-            
-            # Show table
-            with st.expander("📊 View detailed breakdown"):
-                role_data['Percentage'] = (role_data['Count'] / role_data['Count'].sum() * 100).round(1)
-                st.dataframe(role_data, use_container_width=True)
-        else:
-            st.info("No role/department column found")
-    
-    with col2:
+        # Age distribution
         if cols['age']:
-            st.subheader("Age Distribution")
-            
+            st.subheader("👤 Age Distribution")
             age_data = df[cols['age']].value_counts().reset_index()
             age_data.columns = ['Age Group', 'Count']
             
-            fig = create_pie_chart(age_data, 'Count', 'Age Group', 'Age Distribution')
+            fig, ax = plt.subplots(figsize=(8, 6))
+            colors_palette = sns.color_palette("magma", len(age_data))
+            wedges, texts, autotexts = ax.pie(
+                age_data['Count'],
+                labels=age_data['Age Group'],
+                autopct='%1.1f%%',
+                colors=colors_palette,
+                startangle=90
+            )
+            ax.set_title('Age Distribution', fontsize=14, fontweight='bold')
+            
+            for autotext in autotexts:
+                autotext.set_color('white')
+                autotext.set_fontweight('bold')
+            
+            plt.tight_layout()
             st.pyplot(fig)
             plt.close()
+        
+        # Gender distribution
+        if cols['gender']:
+            st.subheader("⚧ Gender Distribution")
+            gender_data = df[cols['gender']].value_counts().reset_index()
+            gender_data.columns = ['Gender', 'Count']
             
-            # Show table
-            with st.expander("📊 View detailed breakdown"):
-                age_data['Percentage'] = (age_data['Count'] / age_data['Count'].sum() * 100).round(1)
-                st.dataframe(age_data, use_container_width=True)
-        else:
-            st.info("No age column found")
+            fig, ax = plt.subplots(figsize=(8, 5))
+            sns.barplot(x='Gender', y='Count', data=gender_data, palette='coolwarm', ax=ax)
+            ax.set_title('Respondents by Gender', fontsize=14, fontweight='bold')
+            
+            for i, v in enumerate(gender_data['Count']):
+                ax.text(i, v, f'{v}', ha='center', va='bottom', fontweight='bold')
+            
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
+    
+    with col2:
+        # Years employed
+        if cols['years']:
+            st.subheader("📅 Years Employed")
+            years_data = df[cols['years']].value_counts().reset_index()
+            years_data.columns = ['Years', 'Count']
+            
+            fig, ax = plt.subplots(figsize=(8, 6))
+            sns.barplot(x='Years', y='Count', data=years_data, palette='cividis', ax=ax)
+            ax.set_title('Years Employed Distribution', fontsize=14, fontweight='bold')
+            plt.xticks(rotation=45)
+            
+            for i, v in enumerate(years_data['Count']):
+                ax.text(i, v, f'{v}', ha='center', va='bottom', fontweight='bold')
+            
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
 
 # ================================================================
-# TAB 3: TEXT ANALYSIS
+# TAB 3: CROSS-ANALYSIS
 # ================================================================
 with tab3:
+    st.header("Cross-Analysis: Recommendation by Demographics")
+    
+    if cols['recommend']:
+        # Recommendation by Role
+        if cols['role']:
+            st.subheader("📊 Recommendation by Role/Department")
+            
+            fig, ax = plt.subplots(figsize=(14, 7))
+            rec_by_role = pd.crosstab(df[cols['role']], df[cols['recommend']])
+            rec_by_role.plot(kind='bar', ax=ax, colormap='Set2')
+            ax.set_title('Recommendation Likelihood by Role', fontsize=14, fontweight='bold')
+            ax.set_xlabel('Role/Department', fontsize=11)
+            ax.set_ylabel('Count', fontsize=11)
+            plt.xticks(rotation=45, ha='right')
+            plt.legend(title='Recommendation', bbox_to_anchor=(1.05, 1), loc='upper left')
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
+        
+        # Recommendation by Age
+        if cols['age']:
+            st.subheader("👥 Recommendation by Age Group")
+            
+            fig, ax = plt.subplots(figsize=(12, 6))
+            rec_by_age = pd.crosstab(df[cols['age']], df[cols['recommend']])
+            rec_by_age.plot(kind='bar', ax=ax, colormap='Set3')
+            ax.set_title('Recommendation Likelihood by Age Group', fontsize=14, fontweight='bold')
+            ax.set_xlabel('Age Group', fontsize=11)
+            ax.set_ylabel('Count', fontsize=11)
+            plt.xticks(rotation=45, ha='right')
+            plt.legend(title='Recommendation', bbox_to_anchor=(1.05, 1), loc='upper left')
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
+        
+        # Recommendation by Years Employed
+        if cols['years']:
+            st.subheader("📅 Recommendation by Years Employed")
+            
+            fig, ax = plt.subplots(figsize=(12, 6))
+            rec_by_years = pd.crosstab(df[cols['years']], df[cols['recommend']])
+            rec_by_years.plot(kind='bar', ax=ax, colormap='viridis')
+            ax.set_title('Recommendation Likelihood by Tenure', fontsize=14, fontweight='bold')
+            ax.set_xlabel('Years Employed', fontsize=11)
+            ax.set_ylabel('Count', fontsize=11)
+            plt.xticks(rotation=45, ha='right')
+            plt.legend(title='Recommendation', bbox_to_anchor=(1.05, 1), loc='upper left')
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
+    else:
+        st.info("No recommendation data available for cross-analysis")
+
+# ================================================================
+# TAB 4: TEXT ANALYSIS
+# ================================================================
+with tab4:
     st.header("Text Response Analysis")
     
     if cols['text']:
+        # Sentiment overview
+        st.subheader("😊 Sentiment Analysis")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.success(f"**✅ Positive Indicators:** {positive_count}")
+        with col2:
+            st.warning(f"**⚠️ Concern Areas:** {negative_count}")
+        
+        sentiment_df = pd.DataFrame({
+            'Sentiment': ['Positive', 'Negative'],
+            'Count': [positive_count, negative_count]
+        })
+        
+        fig, ax = plt.subplots(figsize=(10, 5))
+        colors_sent = ['#10b981', '#ef4444']
+        bars = ax.bar(sentiment_df['Sentiment'], sentiment_df['Count'], color=colors_sent)
+        ax.set_title('Sentiment Distribution in Comments', fontsize=14, fontweight='bold')
+        ax.set_ylabel('Frequency', fontsize=11)
+        
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                   f'{int(height)}', ha='center', va='bottom', fontsize=11, fontweight='bold')
+        
+        plt.tight_layout()
+        st.pyplot(fig)
+        plt.close()
+        
         # Word frequency
-        st.subheader("Most Frequent Words")
+        st.subheader("📝 Most Frequent Words")
         
         word_freq = get_word_frequency(df, cols['text'], top_n=25)
         if word_freq:
             word_df = pd.DataFrame(word_freq, columns=['Word', 'Frequency'])
             
-            fig = create_bar_chart(word_df, 'Frequency', 'Word',
-                                  'Top 25 Most Frequent Words',
-                                  figsize=(10, 12), horizontal=True, color='#ec4899')
+            fig, ax = plt.subplots(figsize=(10, 12))
+            sns.barplot(y='Word', x='Frequency', data=word_df, palette='plasma', ax=ax)
+            ax.set_title('Top 25 Most Frequent Words in Comments', fontsize=14, fontweight='bold')
+            ax.set_xlabel('Frequency', fontsize=11)
+            
+            for i, v in enumerate(word_df['Frequency']):
+                ax.text(v, i, f' {v}', va='center', fontsize=9, fontweight='bold')
+            
+            plt.tight_layout()
             st.pyplot(fig)
             plt.close()
             
@@ -693,16 +734,13 @@ with tab3:
                 "word_frequency.csv",
                 "text/csv"
             )
-        else:
-            st.info("No words found to analyze")
         
-        # Text columns list
-        st.subheader("Text Response Columns Analyzed")
+        # Text columns analyzed
+        st.subheader("📋 Text Response Columns Analyzed")
         for i, col in enumerate(cols['text'], 1):
             st.write(f"**{i}.** {col}")
             
-            # Show sample responses
-            with st.expander(f"View sample responses from: {col[:50]}..."):
+            with st.expander(f"View sample responses"):
                 samples = df[col].dropna().head(5)
                 for idx, sample in enumerate(samples, 1):
                     st.write(f"**Response {idx}:** {sample}")
@@ -710,9 +748,9 @@ with tab3:
         st.info("No text response columns detected in your data")
 
 # ================================================================
-# TAB 4: THEMES
+# TAB 5: THEMES
 # ================================================================
-with tab4:
+with tab5:
     st.header("Theme Analysis")
     
     if cols['text']:
@@ -721,26 +759,32 @@ with tab4:
         theme_df = theme_df.sort_values('Mentions', ascending=False)
         
         # Main chart
-        fig = create_bar_chart(theme_df, 'Mentions', 'Theme',
-                              'Key Themes in Survey Responses',
-                              figsize=(10, 8), horizontal=True, color='#10b981')
+        fig, ax = plt.subplots(figsize=(10, 8))
+        sns.barplot(y='Theme', x='Mentions', data=theme_df, palette='RdYlGn', ax=ax)
+        ax.set_title('Key Themes in Survey Responses', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Number of Mentions', fontsize=11)
+        
+        for i, v in enumerate(theme_df['Mentions']):
+            ax.text(v, i, f' {v}', va='center', fontsize=10, fontweight='bold')
+        
+        plt.tight_layout()
         st.pyplot(fig)
         plt.close()
         
         # Theme details
-        st.subheader("Theme Breakdown")
+        st.subheader("🔍 Theme Breakdown")
         
         col1, col2 = st.columns(2)
         
         for idx, (theme, keywords) in enumerate(THEMES.items()):
             with (col1 if idx % 2 == 0 else col2):
                 mentions = theme_counts[theme]
-                with st.expander(f"🔍 {theme} ({mentions} mentions)"):
+                with st.expander(f"📌 {theme} ({mentions} mentions)"):
                     st.write(f"**Keywords tracked:** {', '.join(keywords)}")
                     if mentions > 0:
-                        st.success(f"Found in {mentions} responses")
+                        st.success(f"✅ Found in {mentions} responses")
                     else:
-                        st.info("No mentions found")
+                        st.info("ℹ️ No mentions found")
         
         # Export theme data
         st.markdown("---")
@@ -756,10 +800,21 @@ with tab4:
         st.info("No text columns available for theme analysis")
 
 # ================================================================
-# TAB 5: RAW DATA
+# TAB 6: RAW DATA
 # ================================================================
-with tab5:
+with tab6:
     st.header("Raw Survey Data")
+    
+    # Dataset info
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Total Rows", df.shape[0])
+    with col2:
+        st.metric("Total Columns", df.shape[1])
+    with col3:
+        missing = df.isnull().sum().sum()
+        st.metric("Missing Values", missing)
     
     # Search functionality
     search_term = st.text_input("🔍 Search in data", "", placeholder="Enter search term...")
@@ -775,28 +830,16 @@ with tab5:
     else:
         st.dataframe(df, use_container_width=True, height=400)
     
-    # Data info
-    st.markdown("---")
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.info(f"**Rows:** {df.shape[0]}")
-    with col2:
-        st.info(f"**Columns:** {df.shape[1]}")
-    with col3:
-        missing = df.isnull().sum().sum()
-        st.info(f"**Missing Values:** {missing}")
-    
     # Download options
     st.markdown("---")
-    st.subheader("Download Options")
+    st.subheader("📥 Download Options")
     
     col1, col2 = st.columns(2)
     
     with col1:
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button(
-            "📥 Download as CSV",
+            "📄 Download Full Dataset (CSV)",
             csv,
             "survey_data.csv",
             "text/csv",
@@ -804,41 +847,27 @@ with tab5:
         )
     
     with col2:
-        # Generate PDF report
-        try:
-            pdf_buffer = generate_pdf_report(df, cols, positive_count, negative_count)
-            st.download_button(
-                "📄 Download PDF Report",
-                pdf_buffer,
-                f"survey_analysis_{datetime.now().strftime('%Y%m%d')}.pdf",
-                "application/pdf",
-                use_container_width=True
-            )
-        except Exception as e:
-            st.error(f"Error generating PDF: {str(e)}")
-            # Fallback to CSV
-            summary = {
-                'Total Responses': [len(df)],
-                'Positive Mentions': [positive_count],
-                'Negative Mentions': [negative_count],
-                'Text Columns': [len(cols['text']) if cols['text'] else 0]
-            }
-            summary_df = pd.DataFrame(summary)
-            summary_csv = summary_df.to_csv(index=False).encode('utf-8')
-            
-            st.download_button(
-                "📊 Download Summary CSV",
-                summary_csv,
-                "summary_report.csv",
-                "text/csv",
-                use_container_width=True
-            )
+        # Summary CSV
+        summary = {
+            'Metric': ['Total Responses', 'Positive Mentions', 'Negative Mentions', 'NPS Score'],
+            'Value': [len(df), positive_count, negative_count, f"{nps_score:.1f}" if nps_score else "N/A"]
+        }
+        summary_df = pd.DataFrame(summary)
+        summary_csv = summary_df.to_csv(index=False).encode('utf-8')
+        
+        st.download_button(
+            "📊 Download Summary Metrics (CSV)",
+            summary_csv,
+            "summary_metrics.csv",
+            "text/csv",
+            use_container_width=True
+        )
 
 # Footer
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #6b7280; padding: 2rem;'>
-    <p>Built with Streamlit • Employee Survey Analysis Tool</p>
-    <p>Upload a new file to analyze different data</p>
+    <p><strong>Employee Survey Analysis Tool</strong> • Built with Streamlit</p>
+    <p>📊 Comprehensive insights • 📄 PDF Reports • 📈 Data Visualization</p>
 </div>
 """, unsafe_allow_html=True)
