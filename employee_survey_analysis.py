@@ -1,5 +1,5 @@
 # ================================================================
-# Streamlit Employee Survey Dashboard - Updated with Labels & Colorful KPIs
+# Streamlit Employee Survey Dashboard - Full Version
 # ================================================================
 
 import pandas as pd
@@ -35,9 +35,9 @@ if uploaded_file:
     disability_col = [c for c in df.columns if "disability" in c.lower()][0]
 
     # -----------------------------
-    # Convert key columns to str
+    # Convert key columns to str where needed
     # -----------------------------
-    for col in [recommend_col, recognized_col, growth_col, impact_col, training_pref_col, fulfillment_col, disability_col]:
+    for col in [recognized_col, growth_col, impact_col, training_pref_col, fulfillment_col, disability_col]:
         df[col] = df[col].astype(str)
 
     # -----------------------------
@@ -51,34 +51,42 @@ if uploaded_file:
     st.write(f"Filtered dataset: {df_filtered.shape[0]} respondents")
 
     # -----------------------------
-    # KPIs in colorful boxes
+    # KPIs in small square boxes (Power BI style)
     # -----------------------------
-    positive_rec = df_filtered[df_filtered[recommend_col].str.lower().str.contains("likely|yes", na=False)].shape[0]
+    total = df_filtered.shape[0]
+
+    # Recommend Homes First KPI (numeric)
+    recommend_scores = pd.to_numeric(df_filtered[recommend_col], errors='coerce')
+    positive_rec = recommend_scores[recommend_scores >= 8].count()
+    avg_recommend = recommend_scores.mean()
+
     recognized = df_filtered[df_filtered[recognized_col].str.lower().str.contains("yes|somewhat", na=False)].shape[0]
     growth = df_filtered[df_filtered[growth_col].str.lower().str.contains("yes", na=False)].shape[0]
     impact = df_filtered[df_filtered[impact_col].str.lower().str.contains("positive impact", na=False)].shape[0]
-    total = df_filtered.shape[0]
 
-    def kpi_box(title, value, color):
+    def kpi_tile(title, value, color):
         st.markdown(f"""
             <div style="
+                display:inline-block;
+                width: 180px;
+                height: 120px;
                 background-color: {color};
-                padding: 20px;
                 border-radius: 10px;
-                text-align: center;
-                color: white;
-                font-size: 18px;
-                margin-bottom: 10px;
+                margin:5px;
+                text-align:center;
+                color:white;
+                font-size:16px;
             ">
-                <b>{title}</b><br><span style='font-size:24px'>{value}</span>
+                <div style='padding-top:20px'><b>{title}</b></div>
+                <div style='font-size:28px; padding-top:10px'>{value}</div>
             </div>
-            """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
     col1, col2, col3, col4 = st.columns(4)
-    kpi_box("Recommend Homes First", f"{positive_rec}/{total} ({positive_rec/total*100:.1f}%)", "#6c5ce7")  # purple
-    kpi_box("Feel Recognized", f"{recognized}/{total} ({recognized/total*100:.1f}%)", "#00b894")  # green
-    kpi_box("See Potential for Growth", f"{growth}/{total} ({growth/total*100:.1f}%)", "#fd79a8")  # pink
-    kpi_box("Feel Positive Impact", f"{impact}/{total} ({impact/total*100:.1f}%)", "#e17055")  # orange
+    kpi_tile("Recommend Homes First", f"{positive_rec}/{total} ({avg_recommend:.1f}/10 avg)", "#6c5ce7")
+    kpi_tile("Feel Recognized", f"{recognized}/{total} ({recognized/total*100:.1f}%)", "#00b894")
+    kpi_tile("See Potential for Growth", f"{growth}/{total} ({growth/total*100:.1f}%)", "#fd79a8")
+    kpi_tile("Feel Positive Impact", f"{impact}/{total} ({impact/total*100:.1f}%)", "#e17055")
 
     # -----------------------------
     # Helper for counts inside bars
@@ -99,103 +107,57 @@ if uploaded_file:
                                 ha='center', va='center', color='white', fontsize=12)
 
     # -----------------------------
-    # Demographics
-    # -----------------------------
-    st.header("Demographics")
-    col1, col2, col3 = st.columns(3)
-
-    # Role
-    fig, ax = plt.subplots(figsize=(12,6))
-    order = df_filtered[role_col].value_counts().index
-    sns.countplot(y=df_filtered[role_col], order=order, palette='viridis', ax=ax)
-    ax.set_title("Respondents by Role/Department", fontsize=16, pad=15)
-    add_counts(ax, vertical=False)
-    plt.tight_layout(pad=2)
-    col1.pyplot(fig)
-
-    # Age
-    fig, ax = plt.subplots(figsize=(12,6))
-    order = df_filtered[age_col].value_counts().index
-    sns.countplot(x=df_filtered[age_col], order=order, palette='magma', ax=ax)
-    ax.set_title("Respondents by Age Group", fontsize=16, pad=15)
-    plt.xticks(rotation=0)
-    add_counts(ax)
-    plt.tight_layout(pad=2)
-    col2.pyplot(fig)
-
-    # Gender
-    fig, ax = plt.subplots(figsize=(12,6))
-    order = df_filtered[gender_col].value_counts().index
-    sns.countplot(x=df_filtered[gender_col], order=order, palette='coolwarm', ax=ax)
-    ax.set_title("Respondents by Gender", fontsize=16, pad=15)
-    plt.xticks(rotation=0)
-    add_counts(ax)
-    plt.tight_layout(pad=2)
-    col3.pyplot(fig)
-
-    # -----------------------------
-    # Job Fulfillment (extra space)
+    # Job Fulfillment Chart
     # -----------------------------
     st.header("Job Fulfillment")
+    fig, ax = plt.subplots(figsize=(14,10))
     order = df_filtered[fulfillment_col].value_counts().index
-    fig, ax = plt.subplots(figsize=(14,8))
     sns.countplot(x=df_filtered[fulfillment_col], order=order, palette='plasma', ax=ax)
-    ax.set_title("Job Fulfillment", fontsize=16, pad=30)  # extra padding
+    ax.set_title("Job Fulfillment", fontsize=16, pad=50)  # extra space between title and labels
     plt.xticks(rotation=0, ha='center')
     add_counts(ax)
-    plt.tight_layout(pad=2)
+    plt.subplots_adjust(top=0.85)
     st.pyplot(fig)
 
     # -----------------------------
-    # Training Preferences (extra space)
+    # Training Preferences Chart
     # -----------------------------
     st.header("Training Preferences")
+    fig, ax = plt.subplots(figsize=(14,10))
     order = df_filtered[training_pref_col].value_counts().index
-    fig, ax = plt.subplots(figsize=(14,8))
     sns.countplot(x=df_filtered[training_pref_col], order=order, palette='Set2', ax=ax)
-    ax.set_title("Training Mode Preference", fontsize=16, pad=30)  # extra padding
+    ax.set_title("Training Mode Preference", fontsize=16, pad=50)  # extra space
     plt.xticks(rotation=0, ha='center')
     add_counts(ax)
-    plt.tight_layout(pad=2)
+    plt.subplots_adjust(top=0.85)
     st.pyplot(fig)
 
     # -----------------------------
-    # Disability Analysis (Stacked Percentage)
+    # Disabilities Analysis (vertical bars, extra space)
     # -----------------------------
-    st.header("Disability Analysis")
-    def plot_stacked_pct(df, category, hue, palette):
-        fig, ax = plt.subplots(figsize=(12,7))
-        cross = pd.crosstab(df[category], df[hue], normalize='index')*100
-        cross.plot(kind='bar', stacked=True, color=palette, ax=ax)
-        plt.ylabel("Percentage")
-        plt.xticks(rotation=0)
-        plt.legend(title=hue, bbox_to_anchor=(1.05,1), loc='upper left')
-        plt.tight_layout(pad=2)
-        st.pyplot(fig)
-        plt.clf()
+    st.header("Disabilities Analysis")
+    df_filtered[disability_col] = df_filtered[disability_col].fillna("No Disability")
 
-    st.subheader("Disability by Age Group")
-    plot_stacked_pct(df_filtered, age_col, disability_col, palette=sns.color_palette("Set1"))
-
-    st.subheader("Disability by Gender")
-    plot_stacked_pct(df_filtered, gender_col, disability_col, palette=sns.color_palette("Set2"))
-
-    # -----------------------------
-    # Cross Analysis
-    # -----------------------------
-    st.header("Cross Analysis")
-    st.subheader("Recommendation by Role")
-    fig, ax = plt.subplots(figsize=(14,7))
-    sns.countplot(x=df_filtered[recommend_col], hue=df_filtered[role_col], data=df_filtered, palette='Set2', ax=ax)
-    ax.set_title("Recommendation by Role/Department", fontsize=16, pad=15)
-    plt.xticks(rotation=0)
-    plt.legend(bbox_to_anchor=(1.05,1), loc='upper left')
+    # Disabilities by Age
+    fig, ax = plt.subplots(figsize=(12,8))
+    sns.countplot(x=df_filtered[age_col], hue=df_filtered[disability_col], palette='Set3',
+                  order=df_filtered[age_col].value_counts().index, ax=ax)
+    ax.set_title("Disabilities by Age Group", fontsize=16, pad=50)
+    plt.xticks(rotation=0, ha='center')
+    plt.ylabel("Number of Employees")
+    plt.xlabel("Age Group")
+    plt.legend(title="Disability Status", bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.subplots_adjust(top=0.85)
     st.pyplot(fig)
 
-    st.subheader("Recommendation by Age Group")
-    fig, ax = plt.subplots(figsize=(14,7))
-    sns.countplot(x=df_filtered[recommend_col], hue=df_filtered[age_col], data=df_filtered, palette='Set3', ax=ax)
-    ax.set_title("Recommendation by Age Group", fontsize=16, pad=15)
-    plt.xticks(rotation=0)
-    plt.legend(bbox_to_anchor=(1.05,1), loc='upper left')
+    # Disabilities by Gender
+    fig, ax = plt.subplots(figsize=(12,8))
+    sns.countplot(x=df_filtered[gender_col], hue=df_filtered[disability_col], palette='Set2',
+                  order=df_filtered[gender_col].value_counts().index, ax=ax)
+    ax.set_title("Disabilities by Gender", fontsize=16, pad=50)
+    plt.xticks(rotation=0, ha='center')
+    plt.ylabel("Number of Employees")
+    plt.xlabel("Gender")
+    plt.legend(title="Disability Status", bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.subplots_adjust(top=0.85)
     st.pyplot(fig)
