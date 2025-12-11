@@ -10,6 +10,9 @@ plt.rcParams['figure.figsize'] = (10,6)
 st.set_page_config(page_title="Homes First Survey Analysis", layout="wide")
 st.title("Homes First Employee Survey Dashboard")
 
+# -----------------------------
+# Upload file
+# -----------------------------
 uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
@@ -27,6 +30,7 @@ recommend_col = [c for c in df.columns if "recommend" in c.lower()][0]
 fulfillment_col = [c for c in df.columns if "fulfilling" in c.lower()][0]
 training_pref_col = [c for c in df.columns if "live virtual training" in c.lower()][0]
 disability_col = [c for c in df.columns if "disability" in c.lower() and "identify" in c.lower()][0]
+years_col = 'Years_Employed_Num'
 
 # -----------------------------
 # Filters
@@ -41,32 +45,48 @@ df_filtered = df[df[role_col].isin(role_filter) & df[age_col].isin(age_filter) &
 st.write(f"Filtered dataset: {df_filtered.shape[0]} respondents")
 
 # -----------------------------
-# KPIs
+# Map years employed to numeric
 # -----------------------------
-col1, col2, col3, col4 = st.columns(4)
+def map_years_to_number(x):
+    if pd.isna(x):
+        return np.nan
+    x = str(x).strip()
+    if "-" in x:
+        parts = x.split("-")
+        try:
+            return (float(parts[0]) + float(parts[1])) / 2
+        except:
+            return np.nan
+    elif x.lower() in ["n/a", "na", "don't know", "unknown"]:
+        return np.nan
+    else:
+        try:
+            return float(x)
+        except:
+            return np.nan
 
-col1.metric("Total Respondents", f"{df_filtered.shape[0]}")
-col2.metric("Avg Years Employed", f"{df_filtered['How many years have you been employed by Homes First?'].dropna().mean():.1f}")
+df_filtered[years_col] = df_filtered['How many years have you been employed by Homes First?'].apply(map_years_to_number)
 
-# Job Fulfillment average: convert to numeric code safely
+# -----------------------------
+# KPIs - horizontal layout
+# -----------------------------
+kpi_cols = st.columns(4)
+kpi_cols[0].metric("Total Respondents", f"{df_filtered.shape[0]}")
+kpi_cols[1].metric("Avg Years Employed", f"{df_filtered[years_col].mean():.1f}")
 fulf_codes = pd.Categorical(df_filtered[fulfillment_col]).codes
-col3.metric("Avg Job Fulfillment", f"{fulf_codes.mean():.1f}")
-
-# Recommend Homes First: numeric out of 10
+kpi_cols[2].metric("Avg Job Fulfillment", f"{fulf_codes.mean():.1f}")
 avg_recommend = df_filtered[recommend_col].mean()
-median_recommend = df_filtered[recommend_col].median()
-col4.metric("Avg Recommend Homes First", f"{avg_recommend:.1f}/10")
-st.caption(f"Median Recommendation Score: {median_recommend:.0f}/10")
+kpi_cols[3].metric("Avg Recommend Homes First", f"{avg_recommend:.1f}/10")
 
 # -----------------------------
-# Helper function for single countplot labels
+# Helper: Add labels inside bars & counts above
 # -----------------------------
 def add_labels(ax, labels=None):
     for i, p in enumerate(ax.patches):
         height = p.get_height()
-        # Count on top
+        # Count above
         ax.text(p.get_x() + p.get_width()/2., height + 0.1, int(height), ha="center", va="bottom", fontsize=12, color="black")
-        # Answer label inside
+        # Answer inside
         if labels is not None and i < len(labels):
             ax.text(p.get_x() + p.get_width()/2., height/2, labels[i], ha="center", va="center", fontsize=12, color="white", wrap=True)
 
