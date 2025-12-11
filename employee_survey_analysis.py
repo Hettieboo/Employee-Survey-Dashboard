@@ -1,5 +1,5 @@
 # ================================================================
-# Streamlit Employee Survey Dashboard - Updated with Label Fixes
+# Streamlit Employee Survey Dashboard - Updated with Labels & Colorful KPIs
 # ================================================================
 
 import pandas as pd
@@ -51,23 +51,34 @@ if uploaded_file:
     st.write(f"Filtered dataset: {df_filtered.shape[0]} respondents")
 
     # -----------------------------
-    # KPIs
+    # KPIs in colorful boxes
     # -----------------------------
-    st.header("Key Metrics")
-    col1, col2, col3, col4 = st.columns(4)
+    positive_rec = df_filtered[df_filtered[recommend_col].str.lower().str.contains("likely|yes", na=False)].shape[0]
+    recognized = df_filtered[df_filtered[recognized_col].str.lower().str.contains("yes|somewhat", na=False)].shape[0]
+    growth = df_filtered[df_filtered[growth_col].str.lower().str.contains("yes", na=False)].shape[0]
+    impact = df_filtered[df_filtered[impact_col].str.lower().str.contains("positive impact", na=False)].shape[0]
     total = df_filtered.shape[0]
 
-    positive_rec = df_filtered[df_filtered[recommend_col].str.lower().str.contains("likely|yes", na=False)].shape[0]
-    col1.metric("Recommend Homes First", f"{positive_rec}/{total} ({positive_rec/total*100:.1f}%)")
+    def kpi_box(title, value, color):
+        st.markdown(f"""
+            <div style="
+                background-color: {color};
+                padding: 20px;
+                border-radius: 10px;
+                text-align: center;
+                color: white;
+                font-size: 18px;
+                margin-bottom: 10px;
+            ">
+                <b>{title}</b><br><span style='font-size:24px'>{value}</span>
+            </div>
+            """, unsafe_allow_html=True)
 
-    recognized = df_filtered[df_filtered[recognized_col].str.lower().str.contains("yes|somewhat", na=False)].shape[0]
-    col2.metric("Feel Recognized", f"{recognized}/{total} ({recognized/total*100:.1f}%)")
-
-    growth = df_filtered[df_filtered[growth_col].str.lower().str.contains("yes", na=False)].shape[0]
-    col3.metric("See Potential for Growth", f"{growth}/{total} ({growth/total*100:.1f}%)")
-
-    impact = df_filtered[df_filtered[impact_col].str.lower().str.contains("positive impact", na=False)].shape[0]
-    col4.metric("Feel Positive Impact", f"{impact}/{total} ({impact/total*100:.1f}%)")
+    col1, col2, col3, col4 = st.columns(4)
+    kpi_box("Recommend Homes First", f"{positive_rec}/{total} ({positive_rec/total*100:.1f}%)", "#6c5ce7")  # purple
+    kpi_box("Feel Recognized", f"{recognized}/{total} ({recognized/total*100:.1f}%)", "#00b894")  # green
+    kpi_box("See Potential for Growth", f"{growth}/{total} ({growth/total*100:.1f}%)", "#fd79a8")  # pink
+    kpi_box("Feel Positive Impact", f"{impact}/{total} ({impact/total*100:.1f}%)", "#e17055")  # orange
 
     # -----------------------------
     # Helper for counts inside bars
@@ -123,26 +134,26 @@ if uploaded_file:
     col3.pyplot(fig)
 
     # -----------------------------
-    # Job Fulfillment (bigger figure + counts inside)
+    # Job Fulfillment (extra space)
     # -----------------------------
     st.header("Job Fulfillment")
     order = df_filtered[fulfillment_col].value_counts().index
     fig, ax = plt.subplots(figsize=(14,8))
     sns.countplot(x=df_filtered[fulfillment_col], order=order, palette='plasma', ax=ax)
-    ax.set_title("Job Fulfillment", fontsize=16, pad=15)
+    ax.set_title("Job Fulfillment", fontsize=16, pad=30)  # extra padding
     plt.xticks(rotation=0, ha='center')
     add_counts(ax)
     plt.tight_layout(pad=2)
     st.pyplot(fig)
 
     # -----------------------------
-    # Training Preferences (bigger figure + counts inside)
+    # Training Preferences (extra space)
     # -----------------------------
     st.header("Training Preferences")
     order = df_filtered[training_pref_col].value_counts().index
     fig, ax = plt.subplots(figsize=(14,8))
     sns.countplot(x=df_filtered[training_pref_col], order=order, palette='Set2', ax=ax)
-    ax.set_title("Training Mode Preference", fontsize=16, pad=15)
+    ax.set_title("Training Mode Preference", fontsize=16, pad=30)  # extra padding
     plt.xticks(rotation=0, ha='center')
     add_counts(ax)
     plt.tight_layout(pad=2)
@@ -152,7 +163,6 @@ if uploaded_file:
     # Disability Analysis (Stacked Percentage)
     # -----------------------------
     st.header("Disability Analysis")
-
     def plot_stacked_pct(df, category, hue, palette):
         fig, ax = plt.subplots(figsize=(12,7))
         cross = pd.crosstab(df[category], df[hue], normalize='index')*100
