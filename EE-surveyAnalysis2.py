@@ -260,74 +260,108 @@ else:
         return ['\n'.join(textwrap.wrap(str(label), max_width)) for label in labels]
 
     # ================================================================
-    # CHART 1: JOB FULFILLMENT
+    # CHART 1: JOB FULFILLMENT - DONUT CHART
     # ================================================================
     st.markdown("---")
     st.markdown("### 💼 Job Fulfillment Analysis")
     
-    fig1, ax1 = plt.subplots(figsize=(16, 8))
-    fulfillment_counts = df_filtered[fulfillment_col].value_counts()
+    fig1, (ax1a, ax1b) = plt.subplots(1, 2, figsize=(18, 7))
     
+    # Left: Donut chart
+    fulfillment_counts = df_filtered[fulfillment_col].value_counts()
     colors = ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe']
-    sns.barplot(
-        x=fulfillment_counts.index,
-        y=fulfillment_counts.values,
-        palette=colors[:len(fulfillment_counts)],
-        ax=ax1,
-        edgecolor='white',
-        linewidth=2
+    
+    wedges, texts, autotexts = ax1a.pie(
+        fulfillment_counts.values, 
+        labels=None,
+        autopct='%1.1f%%',
+        colors=colors[:len(fulfillment_counts)],
+        startangle=90,
+        pctdistance=0.85,
+        explode=[0.05] * len(fulfillment_counts),
+        wedgeprops=dict(width=0.5, edgecolor='white', linewidth=3)
     )
     
-    ax1.set_title('How fulfilling and rewarding do you find your work?', 
-                 fontsize=18, fontweight='bold', pad=30, color='#2c3e50')
-    ax1.set_xlabel('')
-    ax1.set_ylabel('Number of Responses', fontsize=13, fontweight='600')
-    ax1.spines['top'].set_visible(False)
-    ax1.spines['right'].set_visible(False)
+    for autotext in autotexts:
+        autotext.set_color('white')
+        autotext.set_fontsize(12)
+        autotext.set_fontweight('bold')
     
-    wrapped_labels = wrap_labels(fulfillment_counts.index, max_width=35)
-    ax1.set_xticklabels(wrapped_labels, rotation=0, ha='center', fontsize=10)
+    ax1a.set_title('Distribution of Fulfillment Responses', 
+                   fontsize=16, fontweight='bold', pad=20, color='#2c3e50')
     
-    # Add extra space at bottom for labels
-    plt.subplots_adjust(bottom=0.25)
+    # Add legend with wrapped labels
+    wrapped_labels = wrap_labels(fulfillment_counts.index, max_width=30)
+    legend_labels = [f'{label}\n({count} responses)' for label, count in zip(wrapped_labels, fulfillment_counts.values)]
+    ax1a.legend(legend_labels, loc='center left', bbox_to_anchor=(1, 0, 0.5, 1), fontsize=9)
     
-    add_value_labels(ax1, spacing=3)
+    # Right: Bar chart for comparison
+    sns.barplot(
+        y=fulfillment_counts.index,
+        x=fulfillment_counts.values,
+        palette=colors[:len(fulfillment_counts)],
+        ax=ax1b,
+        edgecolor='white',
+        linewidth=2,
+        orient='h'
+    )
+    
+    ax1b.set_title('Response Count Breakdown', 
+                   fontsize=16, fontweight='bold', pad=20, color='#2c3e50')
+    ax1b.set_xlabel('Number of Responses', fontsize=12, fontweight='600')
+    ax1b.set_ylabel('')
+    wrapped_y_labels = wrap_labels(fulfillment_counts.index, max_width=30)
+    ax1b.set_yticklabels(wrapped_y_labels, fontsize=9)
+    ax1b.spines['top'].set_visible(False)
+    ax1b.spines['right'].set_visible(False)
+    
+    # Add value labels
+    for i, (bar, val) in enumerate(zip(ax1b.patches, fulfillment_counts.values)):
+        ax1b.text(val + 0.5, bar.get_y() + bar.get_height()/2, 
+                 f'{int(val)}', va='center', fontsize=11, fontweight='bold', color='#2c3e50')
+    
     plt.tight_layout()
     st.pyplot(fig1)
 
     # ================================================================
-    # CHART 2: TRAINING PREFERENCES
+    # CHART 2: TRAINING PREFERENCES - LOLLIPOP CHART
     # ================================================================
     st.markdown("---")
     st.markdown("### 📚 Training Preferences")
     
     fig2, ax2 = plt.subplots(figsize=(16, 8))
-    training_counts = df_filtered[training_pref_col].value_counts()
+    training_counts = df_filtered[training_pref_col].value_counts().sort_values(ascending=True)
     
-    colors2 = ['#11998e', '#38ef7d', '#96e6a1', '#d4fc79']
-    sns.barplot(
-        x=training_counts.index,
-        y=training_counts.values,
-        palette=colors2[:len(training_counts)],
-        ax=ax2,
-        edgecolor='white',
-        linewidth=2
-    )
+    colors2 = ['#11998e', '#38ef7d', '#96e6a1', '#d4fc79', '#20E3B2', '#29FFC6']
     
-    ax2.set_title('How do you feel about live virtual training (Zoom/Teams) vs in-person?',
+    # Create lollipop chart
+    wrapped_training = wrap_labels(training_counts.index, max_width=40)
+    y_pos = np.arange(len(training_counts))
+    
+    # Plot stems
+    ax2.hlines(y=y_pos, xmin=0, xmax=training_counts.values, 
+               color='#bdc3c7', alpha=0.4, linewidth=2)
+    
+    # Plot lollipop heads
+    ax2.scatter(training_counts.values, y_pos, 
+                color=colors2[:len(training_counts)], 
+                s=500, zorder=3, edgecolors='white', linewidth=3)
+    
+    # Add value labels
+    for i, (x, y) in enumerate(zip(training_counts.values, y_pos)):
+        ax2.text(x + 0.5, y, f'{int(x)}', 
+                va='center', fontsize=12, fontweight='bold', color='#2c3e50')
+    
+    ax2.set_yticks(y_pos)
+    ax2.set_yticklabels(wrapped_training, fontsize=10)
+    ax2.set_title('Training Preference Distribution (Virtual vs In-Person)',
                  fontsize=18, fontweight='bold', pad=30, color='#2c3e50')
-    ax2.set_xlabel('')
-    ax2.set_ylabel('Number of Responses', fontsize=13, fontweight='600')
+    ax2.set_xlabel('Number of Responses', fontsize=13, fontweight='600')
     ax2.spines['top'].set_visible(False)
     ax2.spines['right'].set_visible(False)
+    ax2.spines['left'].set_visible(False)
+    ax2.grid(axis='x', alpha=0.3, linestyle='--')
     
-    wrapped_labels = wrap_labels(training_counts.index, max_width=35)
-    ax2.set_xticklabels(wrapped_labels, rotation=0, ha='center', fontsize=10)
-    
-    # Add extra space at bottom for labels
-    plt.subplots_adjust(bottom=0.25)
-    
-    add_value_labels(ax2, spacing=3)
     plt.tight_layout()
     st.pyplot(fig2)
 
