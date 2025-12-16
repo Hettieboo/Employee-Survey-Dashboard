@@ -132,9 +132,10 @@ with col_buttons:
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("📊 Generate Insights", use_container_width=True, type="primary"):
         st.session_state['generate_insights'] = True
+        st.rerun()
     if st.button("📥 Download PDF", use_container_width=True):
         st.session_state['generate_pdf'] = True
-        st.write("DEBUG: PDF button clicked!")  # Debug message
+        st.rerun()
 
 # ================================================================
 # LOAD DATA
