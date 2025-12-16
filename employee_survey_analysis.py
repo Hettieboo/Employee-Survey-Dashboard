@@ -664,61 +664,65 @@ else:
                 st.markdown('<div class="insights-box">', unsafe_allow_html=True)
                 
                 # Executive Summary
-                st.markdown(f"""
-                <div class="insight-section">
+                st.markdown("""<div class="insight-section">
                     <div class="insight-title">📋 Executive Summary</div>
-                    <div class="insight-text">{insights.get('executive_summary', 'No summary available')}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                </div>""", unsafe_allow_html=True)
+                st.markdown(f'<div class="insight-text">{insights.get("executive_summary", "No summary available")}</div>', unsafe_allow_html=True)
                 
                 # Key Patterns
-                if 'key_patterns' in insights:
-                    st.markdown('<div class="insight-section">', unsafe_allow_html=True)
-                    st.markdown('<div class="insight-title">🔍 Key Patterns Identified</div>', unsafe_allow_html=True)
+                if 'key_patterns' in insights and len(insights['key_patterns']) > 0:
+                    st.markdown("""<div class="insight-section">
+                        <div class="insight-title">🔍 Key Patterns Identified</div>
+                    </div>""", unsafe_allow_html=True)
                     for pattern in insights['key_patterns']:
                         impact_emoji = "🔴" if pattern['impact'] == 'high' else "🟡" if pattern['impact'] == 'medium' else "🟢"
-                        st.markdown(f"<div class='insight-text'>{impact_emoji} <strong>{pattern['pattern']}</strong></div>", unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="insight-text">{impact_emoji} <strong>{pattern["pattern"]}</strong></div>', unsafe_allow_html=True)
                 
                 # Strengths
-                if 'strengths' in insights:
-                    st.markdown('<div class="insight-section">', unsafe_allow_html=True)
-                    st.markdown('<div class="insight-title">💪 Organizational Strengths</div>', unsafe_allow_html=True)
+                if 'strengths' in insights and len(insights['strengths']) > 0:
+                    st.markdown("""<div class="insight-section">
+                        <div class="insight-title">💪 Organizational Strengths</div>
+                    </div>""", unsafe_allow_html=True)
                     for strength in insights['strengths']:
-                        st.markdown(f"<div class='insight-text'>✅ {strength}</div>", unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="insight-text">✅ {strength}</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown("""<div class="insight-section">
+                        <div class="insight-title">💪 Organizational Strengths</div>
+                    </div>""", unsafe_allow_html=True)
+                    st.markdown('<div class="insight-text">⚠️ No metrics exceeded the 70% threshold. Focus on improving core satisfaction drivers.</div>', unsafe_allow_html=True)
                 
                 # Concerns
-                if 'concerns' in insights:
-                    st.markdown('<div class="insight-section">', unsafe_allow_html=True)
-                    st.markdown('<div class="insight-title">⚠️ Areas of Concern</div>', unsafe_allow_html=True)
+                if 'concerns' in insights and len(insights['concerns']) > 0:
+                    st.markdown("""<div class="insight-section">
+                        <div class="insight-title">⚠️ Areas of Concern</div>
+                    </div>""", unsafe_allow_html=True)
                     for concern in insights['concerns']:
-                        st.markdown(f"<div class='insight-text'>⚡ {concern}</div>", unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="insight-text">⚡ {concern}</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown("""<div class="insight-section">
+                        <div class="insight-title">⚠️ Areas of Concern</div>
+                    </div>""", unsafe_allow_html=True)
+                    st.markdown('<div class="insight-text">✅ All key metrics are performing well. Continue monitoring and maintain current practices.</div>', unsafe_allow_html=True)
                 
                 # Recommendations
-                if 'recommendations' in insights:
-                    st.markdown('<div class="insight-section">', unsafe_allow_html=True)
-                    st.markdown('<div class="insight-title">🎯 Strategic Recommendations</div>', unsafe_allow_html=True)
+                if 'recommendations' in insights and len(insights['recommendations']) > 0:
+                    st.markdown("""<div class="insight-section">
+                        <div class="insight-title">🎯 Strategic Recommendations</div>
+                    </div>""", unsafe_allow_html=True)
                     for rec in insights['recommendations']:
                         priority_badge = "🔴 HIGH" if rec['priority'] == 'high' else "🟡 MEDIUM" if rec['priority'] == 'medium' else "🟢 LOW"
-                        st.markdown(f"""
-                        <div class='recommendation'>
+                        st.markdown(f"""<div class='recommendation'>
                             <strong>{priority_badge} PRIORITY</strong><br>
-                            <strong>Action:</strong> {rec['action']}<br>
-                            <strong>Expected Impact:</strong> {rec['expected_impact']}
-                        </div>
-                        """, unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                            <strong>Action:</strong> {rec["action"]}<br>
+                            <strong>Expected Impact:</strong> {rec["expected_impact"]}
+                        </div>""", unsafe_allow_html=True)
                 
                 # Demographic Insights
-                if 'demographic_insights' in insights:
-                    st.markdown(f"""
-                    <div class="insight-section">
+                if 'demographic_insights' in insights and insights['demographic_insights']:
+                    st.markdown("""<div class="insight-section">
                         <div class="insight-title">👥 Demographic Insights</div>
-                        <div class="insight-text">{insights['demographic_insights']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    </div>""", unsafe_allow_html=True)
+                    st.markdown(f'<div class="insight-text">{insights["demographic_insights"]}</div>', unsafe_allow_html=True)
                 
                 st.markdown('</div>', unsafe_allow_html=True)
                 
