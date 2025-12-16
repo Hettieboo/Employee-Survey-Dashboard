@@ -134,6 +134,7 @@ with col_buttons:
         st.session_state['generate_insights'] = True
     if st.button("📥 Download PDF", use_container_width=True):
         st.session_state['generate_pdf'] = True
+        st.write("DEBUG: PDF button clicked!")  # Debug message
 
 # ================================================================
 # LOAD DATA
